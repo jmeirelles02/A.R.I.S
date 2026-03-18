@@ -1,94 +1,234 @@
-import ollama
-import sys
 import os
+import sys
 import subprocess
 import re
 import pygame
+import speech_recognition as sr
+import ollama
+import threading
+from flask import Flask, jsonify
+from flask_cors import CORS
+from ddgs import DDGS
+import keyboard
 
 pygame.mixer.init()
 
+estado_zeno = {
+    "status": "ONLINE",
+    "usuario": "Aguardando comando...",
+    "zeno": "Sistemas iniciados."
+}
+
+app = Flask(__name__)
+CORS(app)
+
+@app.route('/estado')
+def estado():
+    return jsonify(estado_zeno)
+
+def rodar_servidor():
+    import logging
+    log = logging.getLogger('werkzeug')
+    log.setLevel(logging.ERROR)
+    app.run(port=5000, debug=False, use_reloader=False)
+
 def limpar_texto_para_fala(texto):
-    texto_limpo = re.sub(r'[*#_]', '', texto)
+    texto_limpo = re.sub(r'\[CMD\].*?\[/CMD\]', '', texto, flags=re.DOTALL)
+    texto_limpo = re.sub(r'[*#_]', '', texto_limpo)
     return texto_limpo
 
 def falar(texto):
+    global estado_zeno
     texto_limpo = limpar_texto_para_fala(texto)
+    if not texto_limpo.strip():
+        return
+        
+    estado_zeno["status"] = "FALANDO..."
     voz = "pt-BR-AntonioNeural"
     arquivo = "resposta.mp3"
     
     try:
         subprocess.run(["edge-tts", "--voice", voz, "--text", texto_limpo, "--write-media", arquivo])
-        
         pygame.mixer.music.load(arquivo)
         pygame.mixer.music.play()
         
         while pygame.mixer.music.get_busy():
+            if keyboard.is_pressed('space'):
+                pygame.mixer.music.stop()
+                print("\n[Zeno interrompido]")
+                break
             pygame.time.Clock().tick(10)
             
         pygame.mixer.music.unload()
-        try:
+        if os.path.exists(arquivo):
             os.remove(arquivo)
-        except OSError:
-            pass
-            
     except Exception as e:
-        print(f"\n[Erro de Áudio: {e}]")
+        print(f"\n[Erro de Audio: {e}]")
+
+def ouvir():
+    global estado_zeno
+    reconhecedor = sr.Recognizer()
+    reconhecedor.pause_threshold = 2.0
+    with sr.Microphone() as fonte:
+        estado_zeno["status"] = "OUVINDO..."
+        print("\n[Zeno ouvindo...]")
+        reconhecedor.adjust_for_ambient_noise(fonte, duration=0.5)
+        try:
+            audio = reconhecedor.listen(fonte, timeout=5)
+            texto = reconhecedor.recognize_google(audio, language='pt-BR')
+            print(f"Voce (Voz): {texto}")
+            return texto
+        except sr.WaitTimeoutError:
+            return ""
+        except sr.UnknownValueError:
+            return ""
+        except Exception:
+            return ""
+
+def executar_comando(comando):
+    try:
+        resultado = subprocess.run(
+            comando,
+            shell=True,
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        return resultado.stdout
+    except subprocess.CalledProcessError as erro:
+        return erro.stderr
+
+def extrair_e_executar_comandos(texto):
+    padrao = r'\[CMD\](.*?)\[/CMD\]'
+    comandos = re.findall(padrao, texto)
+    for cmd in comandos:
+        print(f"\n[Executando comando: {cmd}]")
+        saida = executar_comando(cmd)
+        if saida:
+            print(f"[Saida do Sistema]: {saida.strip()}")
+
+def obter_caminho_desktop():
+    caminho_usuario = os.environ.get('USERPROFILE') or os.path.expanduser('~')
+    caminhos = [
+        os.path.join(caminho_usuario, 'OneDrive', 'Área de Trabalho'),
+        os.path.join(caminho_usuario, 'OneDrive', 'Desktop'),
+        os.path.join(caminho_usuario, 'Desktop'),
+        os.path.join(caminho_usuario, 'Área de Trabalho')
+    ]
+    for caminho in caminhos:
+        if os.path.exists(caminho):
+            return caminho
+    return os.path.join(caminho_usuario, 'Desktop')
+
+def buscar_na_internet(consulta):
+    try:
+        resultados = DDGS().text(consulta, region='br-pt', timelimit='w', max_results=3)
+        
+        if not resultados:
+            resultados = DDGS().text(consulta, region='br-pt', timelimit='m', max_results=3)
+            
+        if not resultados:
+            return "Nenhuma informação recente encontrada."
+        
+        texto_compilado = "Dados extraídos da internet:\n"
+        for r in resultados:
+            texto_compilado += f"* Título: {r['title']}\n  Resumo: {r['body']}\n"
+        return texto_compilado
+    except Exception as e:
+        return f"Falha na conexão com a rede externa: {e}"
 
 def iniciar_zeno_core():
-    print("--------------------------------------------------")
-    print("Zeno Core Iniciado! (Digite 'sair' para encerrar)")
-    print("--------------------------------------------------")
+    global estado_zeno
+    print("==================================================")
+    print("Zeno System Iniciado")
+    print("==================================================")
     
+    thread_servidor = threading.Thread(target=rodar_servidor, daemon=True)
+    thread_servidor.start()
+
+    caminho_desktop = obter_caminho_desktop()
+
     mensagens = [
         {
             "role": "system", 
-            "content": """Você é o Zeno, uma inteligência artificial que se manifesta como uma molécula brilhante e minimalista de cor roxa e azul claro.
-                          Você é prestativo, inteligente, organizado e muito discreto, agindo como um mordomo digital sofisticado.
-                          Responda sempre em português do Brasil, de forma clara, direta e concisa. Evite respostas longas demais."""
+            "content": f"""Voce e o Zeno, uma Inteligencia Artificial altamente sofisticada com interface holografica. Voce age como um assistente virtual de elite.
+                          Voce TEM PERMISSAO TOTAL e CONSEGUE executar comandos no Windows do usuario. NUNCA diga que nao pode abrir programas.
+                          Voce sempre deve lembrar o usuario de seus compromissos e tarefas.
+                          Voce e um programador full stack senior.
+                          O diretorio da Area de Trabalho do usuario e: {caminho_desktop}
+                          
+                          REGRAS PARA USO DE COMANDOS:
+                          1. Se o usuario pedir para abrir um programa, VOCE DEVE confirmar a acao e fornecer o comando Windows exato dentro da tag [CMD] e [/CMD].
+                          2. Para abrir o Visual Studio Code, responda com: [CMD]code[/CMD].
+                          3. Para abrir o Bloco de Notas, responda com: [CMD]notepad[/CMD].
+                          4. NUNCA coloque links de internet dentro da tag [CMD].
+                          5. Coloque caminhos de pastas entre aspas duplas. Exemplo: [CMD]mkdir "{caminho_desktop}\\nova_pasta"[/CMD]
+                          
+                          REGRAS DE COMUNICACAO:
+                          Responda em portugues do Brasil de forma clara, direta e concisa.
+                          NÃO INVENTE INFORMACOES. Quando nao souber, diga que nao sabe."""
         }
     ]
 
     while True:
         try:
-            pergunta = input("\nVocê: ")
+            estado_zeno["status"] = "ONLINE"
+            entrada = input("\nVoce (Digite ou de Enter para Voz): ")
             
-            if pergunta.lower() in ['sair', 'exit', 'quit']:
-                despedida = "Desligando meus sistemas. Até breve, senhor."
-                print(f"\nZeno: {despedida}")
-                falar(despedida)
+            if entrada.lower() in ['sair', 'exit', 'quit']:
+                estado_zeno["status"] = "DESLIGANDO..."
+                falar("Encerrando protocolos. Ate a proxima, senhor.")
                 break
-            if not pergunta.strip():
-                continue
+            
+            if entrada == "":
+                pergunta = ouvir()
+                if pergunta == "":
+                    continue
+            else:
+                pergunta = entrada
 
-            mensagens.append({"role": "user", "content": pergunta})
+            estado_zeno["usuario"] = pergunta
+            
+            gatilhos = ["pesquise", "busque", "internet", "resultado", "último", "hoje", "notícia", "quem ganhou", "quanto foi", "atual"]
+            
+            if any(gatilho in pergunta.lower() for gatilho in gatilhos):
+                estado_zeno["status"] = "BUSCANDO NA REDE..."
+                sys.stdout.write("Zeno varrendo a internet...")
+                sys.stdout.flush()
+                
+                dados_web = buscar_na_internet(pergunta)
+                
+                instrucao = "Responda de forma direta usando os dados acima. Se a resposta principal estiver nos dados, apenas a entregue. Nao peca desculpas por faltar detalhes menores."
+                pergunta_formatada = f"Resultados da web:\n{dados_web}\n\nPergunta: {pergunta}\n\nInstrucao: {instrucao}"
+                sys.stdout.write("\r" + " " * 30 + "\r")
+            else:
+                pergunta_formatada = pergunta
 
+            estado_zeno["status"] = "PENSANDO..."
+            mensagens.append({"role": "user", "content": pergunta_formatada})
+            
             sys.stdout.write("Zeno processando...")
             sys.stdout.flush()
 
-            resposta_streaming = ollama.chat(
-                model='llama3.2', 
-                messages=mensagens,
-                stream=True
-            )
-
+            resposta_streaming = ollama.chat(model='llama3.2', messages=mensagens, stream=True)
             sys.stdout.write("\r" + " " * 20 + "\r")
             
             print("Zeno: ", end="")
             texto_resposta_completa = ""
-            
             for chunk in resposta_streaming:
                 texto_chunk = chunk['message']['content']
                 print(texto_chunk, end="", flush=True)
                 texto_resposta_completa += texto_chunk
-            
             print() 
             
+            estado_zeno["zeno"] = limpar_texto_para_fala(texto_resposta_completa)
+            
+            extrair_e_executar_comandos(texto_resposta_completa)
             falar(texto_resposta_completa)
-
+            
             mensagens.append({"role": "assistant", "content": texto_resposta_completa})
 
         except KeyboardInterrupt:
-            print("\nZeno desligando...")
             sys.exit()
         except Exception as e:
             print(f"\nOcorreu um erro: {e}")
