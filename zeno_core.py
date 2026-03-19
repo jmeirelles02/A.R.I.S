@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="pygame")
+
 import os
 import sys
 import subprocess
@@ -6,10 +9,15 @@ import pygame
 import speech_recognition as sr
 import ollama
 import threading
+import psycopg2
 from flask import Flask, jsonify
 from flask_cors import CORS
 from ddgs import DDGS
 import keyboard
+from dotenv import load_dotenv
+
+load_dotenv()
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 pygame.mixer.init()
 
@@ -32,8 +40,39 @@ def rodar_servidor():
     log.setLevel(logging.ERROR)
     app.run(port=5000, debug=False, use_reloader=False)
 
+def inicializar_banco():
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS memoria (
+            id SERIAL PRIMARY KEY,
+            usuario TEXT,
+            informacao TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+def salvar_memoria(usuario, informacao):
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    cursor.execute('INSERT INTO memoria (usuario, informacao) VALUES (%s, %s)', (usuario, informacao))
+    conn.commit()
+    conn.close()
+
+def carregar_memoria(usuario):
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    cursor.execute('SELECT informacao FROM memoria WHERE usuario = %s', (usuario,))
+    resultados = cursor.fetchall()
+    conn.close()
+    if resultados:
+        return "\n".join([f"* {r[0]}" for r in resultados])
+    return "Nenhuma informacao salva."
+
 def limpar_texto_para_fala(texto):
     texto_limpo = re.sub(r'\[CMD\].*?\[/CMD\]', '', texto, flags=re.DOTALL)
+    texto_limpo = re.sub(r'\[MEM\].*?\[/MEM\]', '', texto_limpo, flags=re.DOTALL)
     texto_limpo = re.sub(r'[*#_]', '', texto_limpo)
     return texto_limpo
 
@@ -87,25 +126,23 @@ def ouvir():
 
 def executar_comando(comando):
     try:
-        resultado = subprocess.run(
-            comando,
-            shell=True,
-            check=True,
-            capture_output=True,
-            text=True
-        )
+        resultado = subprocess.run(comando, shell=True, check=True, capture_output=True, text=True)
         return resultado.stdout
     except subprocess.CalledProcessError as erro:
         return erro.stderr
 
-def extrair_e_executar_comandos(texto):
-    padrao = r'\[CMD\](.*?)\[/CMD\]'
-    comandos = re.findall(padrao, texto)
+def processar_tags_ocultas(texto, usuario_atual):
+    comandos = re.findall(r'\[CMD\](.*?)\[/CMD\]', texto)
     for cmd in comandos:
         print(f"\n[Executando comando: {cmd}]")
         saida = executar_comando(cmd)
         if saida:
             print(f"[Saida do Sistema]: {saida.strip()}")
+            
+    memorias = re.findall(r'\[MEM\](.*?)\[/MEM\]', texto)
+    for mem in memorias:
+        print(f"\n[Gravando na memoria: {mem}]")
+        salvar_memoria(usuario_atual, mem)
 
 def obter_caminho_desktop():
     caminho_usuario = os.environ.get('USERPROFILE') or os.path.expanduser('~')
@@ -123,19 +160,17 @@ def obter_caminho_desktop():
 def buscar_na_internet(consulta):
     try:
         resultados = DDGS().text(consulta, region='br-pt', timelimit='w', max_results=3)
-        
         if not resultados:
             resultados = DDGS().text(consulta, region='br-pt', timelimit='m', max_results=3)
-            
         if not resultados:
-            return "Nenhuma informação recente encontrada."
+            return "Nenhuma informacao recente encontrada."
         
-        texto_compilado = "Dados extraídos da internet:\n"
+        texto_compilado = "Dados extraidos da internet:\n"
         for r in resultados:
-            texto_compilado += f"* Título: {r['title']}\n  Resumo: {r['body']}\n"
+            texto_compilado += f"* Titulo: {r['title']}\n  Resumo: {r['body']}\n"
         return texto_compilado
     except Exception as e:
-        return f"Falha na conexão com a rede externa: {e}"
+        return f"Falha na conexao com a rede externa: {e}"
 
 def iniciar_zeno_core():
     global estado_zeno
@@ -143,37 +178,52 @@ def iniciar_zeno_core():
     print("Zeno System Iniciado")
     print("==================================================")
     
+    inicializar_banco()
     thread_servidor = threading.Thread(target=rodar_servidor, daemon=True)
     thread_servidor.start()
 
     caminho_desktop = obter_caminho_desktop()
+    
+    usuario_db = input("\nIdentificacao de usuario necessaria. Digite seu nome: ").strip()
+    if usuario_db == "":
+        usuario_db = "Visitante"
+        
+    memoria_banco = carregar_memoria(usuario_db)
 
     mensagens = [
         {
             "role": "system", 
-            "content": f"""Voce e o Zeno, uma Inteligencia Artificial altamente sofisticada com interface holografica. Voce age como um assistente virtual de elite.
-                          Voce TEM PERMISSAO TOTAL e CONSEGUE executar comandos no Windows do usuario. NUNCA diga que nao pode abrir programas.
-                          Voce sempre deve lembrar o usuario de seus compromissos e tarefas.
-                          Voce e um programador full stack senior.
-                          O diretorio da Area de Trabalho do usuario e: {caminho_desktop}
-                          
-                          REGRAS PARA USO DE COMANDOS:
-                          1. Se o usuario pedir para abrir um programa, VOCE DEVE confirmar a acao e fornecer o comando Windows exato dentro da tag [CMD] e [/CMD].
-                          2. Para abrir o Visual Studio Code, responda com: [CMD]code[/CMD].
-                          3. Para abrir o Bloco de Notas, responda com: [CMD]notepad[/CMD].
-                          4. NUNCA coloque links de internet dentro da tag [CMD].
-                          5. Coloque caminhos de pastas entre aspas duplas. Exemplo: [CMD]mkdir "{caminho_desktop}\\nova_pasta"[/CMD]
-                          
-                          REGRAS DE COMUNICACAO:
-                          Responda em portugues do Brasil de forma clara, direta e concisa.
-                          NÃO INVENTE INFORMACOES. Quando nao souber, diga que nao sabe."""
+            "content": f"""Voce e o Zeno, um assistente virtual de elite.
+Voce TEM PERMISSAO TOTAL para executar comandos no Windows do usuario. NUNCA diga que nao pode abrir programas.
+O diretorio da Area de Trabalho e: {caminho_desktop}
+
+MEMORIA DE CONTEXTO PESSOAL:
+Nome do usuario atual na sessao: {usuario_db}
+Fatos armazenados:
+{memoria_banco}
+
+REGRAS OBRIGATORIAS DE MEMORIA:
+1. Grave fatos novos em tags separadas usando EXCLUSIVAMENTE [MEM] e [/MEM]. 
+2. Exemplo de uso correto: [MEM]O usuario e arquiteto.[/MEM] [MEM]O usuario mora em Sao Paulo.[/MEM]
+3. PROIBICAO ABSOLUTA: NUNCA crie tags inventadas como [AÇÃO], [CADA FATO NOVA] ou [FATOS].
+
+REGRAS PARA USO DE COMANDOS:
+1. Para abrir programas, forneca o comando APENAS dentro de [CMD] e [/CMD].
+2. Exemplo para sites: [CMD]start https://www.youtube.com[/CMD].
+3. Exemplo VS Code: [CMD]code[/CMD]. Bloco de Notas: [CMD]notepad[/CMD].
+4. PROIBICAO ABSOLUTA: NUNCA crie marcacoes de logica de sistema no texto.
+
+COMUNICACAO:
+Responda em portugues do Brasil de forma direta.
+Fale de forma natural.
+NUNCA imprima o seu raciocinio de etapas na tela."""
         }
     ]
 
     while True:
         try:
             estado_zeno["status"] = "ONLINE"
-            entrada = input("\nVoce (Digite ou de Enter para Voz): ")
+            entrada = input(f"\n{usuario_db} (Digite ou de Enter para Voz): ")
             
             if entrada.lower() in ['sair', 'exit', 'quit']:
                 estado_zeno["status"] = "DESLIGANDO..."
@@ -197,8 +247,7 @@ def iniciar_zeno_core():
                 sys.stdout.flush()
                 
                 dados_web = buscar_na_internet(pergunta)
-                
-                instrucao = "Responda de forma direta usando os dados acima. Se a resposta principal estiver nos dados, apenas a entregue. Nao peca desculpas por faltar detalhes menores."
+                instrucao = "Responda de forma direta usando os dados acima."
                 pergunta_formatada = f"Resultados da web:\n{dados_web}\n\nPergunta: {pergunta}\n\nInstrucao: {instrucao}"
                 sys.stdout.write("\r" + " " * 30 + "\r")
             else:
@@ -223,7 +272,7 @@ def iniciar_zeno_core():
             
             estado_zeno["zeno"] = limpar_texto_para_fala(texto_resposta_completa)
             
-            extrair_e_executar_comandos(texto_resposta_completa)
+            processar_tags_ocultas(texto_resposta_completa, usuario_db)
             falar(texto_resposta_completa)
             
             mensagens.append({"role": "assistant", "content": texto_resposta_completa})

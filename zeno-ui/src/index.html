@@ -84,10 +84,13 @@
         width: 70px;
         height: 70px;
         background: radial-gradient(circle, #ffffff 0%, #00f3ff 40%, rgba(0, 150, 255, 0.6) 100%);
-        border-radius: 50%;
         box-shadow: 0 0 30px #00f3ff, 0 0 60px #00f3ff;
-        animation: pulse 2s infinite alternate;
-        transition: all 0.3s ease;
+        animation: simbiose_calma 4s ease-in-out infinite;
+        transition: background 0.3s ease, box-shadow 0.3s ease;
+      }
+
+      .core.agitada {
+        animation: simbiose_agitada 0.3s linear infinite alternate;
       }
 
       @keyframes spin {
@@ -100,9 +103,33 @@
         100% { transform: rotate(0deg); }
       }
 
-      @keyframes pulse {
-        0% { transform: scale(0.95); opacity: 0.8; }
-        100% { transform: scale(1.05); opacity: 1; }
+      @keyframes simbiose_calma {
+        0% { 
+          border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; 
+          transform: scale(0.95) rotate(0deg); 
+          opacity: 0.8; 
+        }
+        50% { 
+          border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; 
+          transform: scale(1.05) rotate(15deg); 
+          opacity: 1; 
+        }
+        100% { 
+          border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; 
+          transform: scale(0.95) rotate(30deg); 
+          opacity: 0.8; 
+        }
+      }
+
+      @keyframes simbiose_agitada {
+        0% { 
+          border-radius: 40% 60% 50% 50% / 40% 50% 60% 50%; 
+          transform: scale(1.1) rotate(0deg); 
+        }
+        100% { 
+          border-radius: 70% 30% 40% 60% / 50% 40% 70% 30%; 
+          transform: scale(1.2) rotate(45deg); 
+        }
       }
 
       .zeno-log {
@@ -163,6 +190,13 @@
           statusText.innerText = `[ ${dados.status} ]`;
           
           let statusStr = dados.status;
+          
+          if (statusStr === "FALANDO...") {
+            coreLight.classList.add('agitada');
+          } else {
+            coreLight.classList.remove('agitada');
+          }
+
           if (statusStr === "OUVINDO...") {
             statusText.style.color = '#ffb700';
             coreLight.style.background = 'radial-gradient(circle, #ffffff 0%, #ffb700 40%, rgba(255, 150, 0, 0.6) 100%)';
@@ -184,6 +218,7 @@
           statusText.style.color = 'red';
           coreLight.style.background = 'red';
           coreLight.style.boxShadow = '0 0 30px red';
+          coreLight.classList.remove('agitada');
         }
       }, 500);
     </script>
