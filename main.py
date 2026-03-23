@@ -84,14 +84,33 @@ def gerar_embedding(texto):
     )
     return resultado.embeddings[0].values
 
+def dividir_em_chunks(texto, tamanho_max=500, sobreposicao=50):
+    chunks = []
+    inicio = 0
+    tamanho_texto = len(texto)
+    
+    if tamanho_texto <= tamanho_max:
+        return [texto]
+        
+    while inicio < tamanho_texto:
+        fim = inicio + tamanho_max
+        chunks.append(texto[inicio:fim])
+        inicio = fim - sobreposicao
+        
+    return chunks
+
 def salvar_memoria(usuario, informacao):
-    vetor = gerar_embedding(informacao)
+    pedacos = dividir_em_chunks(informacao)
     conn = psycopg2.connect(DATABASE_URL)
     cursor = conn.cursor()
-    cursor.execute(
-        'INSERT INTO memoria (usuario, informacao, vetor) VALUES (%s, %s, %s)', 
-        (usuario, informacao, str(vetor))
-    )
+    
+    for pedaco in pedacos:
+        vetor = gerar_embedding(pedaco)
+        cursor.execute(
+            'INSERT INTO memoria (usuario, informacao, vetor) VALUES (%s, %s, %s)', 
+            (usuario, pedaco, str(vetor))
+        )
+        
     conn.commit()
     conn.close()
 
@@ -349,4 +368,4 @@ Responda em portugues do Brasil de forma direta e sem distraçao. NUNCA imprima 
             print(f"\nOcorreu um erro: {e}")
 
 if __name__ == "__main__":
-    iniciar_zeno_core()
+    iniciar_zeno_core() 
