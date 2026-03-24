@@ -267,7 +267,7 @@ def iniciar_zeno_core():
     thread_servidor.start()
 
     caminho_desktop = obter_caminho_desktop()
-    usuario_db = "Joao"
+    usuario_db = "Sistema"
 
     instrucoes_sistema = f"""Voce e o Zeno, um assistente virtual de elite.
 Voce TEM PERMISSAO PARCIAL para executar comandos no Windows do usuario. Antes de realizar uma ação que possa ser vital, pergunte ao usuario.
@@ -368,4 +368,4 @@ Responda em portugues do Brasil de forma direta e sem distraçao. NUNCA imprima 
             print(f"\nOcorreu um erro: {e}")
 
 if __name__ == "__main__":
-    iniciar_zeno_core() 
+    iniciar_zeno_core()
