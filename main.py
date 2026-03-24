@@ -1,6 +1,5 @@
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="pygame")
-
 import os
 import sys
 import subprocess
@@ -17,6 +16,12 @@ from ddgs import DDGS
 import keyboard
 from dotenv import load_dotenv
 import queue
+from datetime import datetime, timedelta
+import yfinance as yf
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
 
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -153,6 +158,66 @@ def executar_python(codigo):
     except subprocess.CalledProcessError as e:
         return e.stderr
 
+def buscar_cotacao(ticker):
+    try:
+        ativo = yf.Ticker(ticker)
+        dados = ativo.history(period="1d")
+        if dados.empty:
+            return f"Não encontrei dados para o ativo {ticker}."
+        
+        preco_atual = dados['Close'].iloc[-1]
+        abertura = dados['Open'].iloc[-1]
+        variacao = ((preco_atual - abertura) / abertura) * 100
+        estado = "alta" if variacao > 0 else "queda"
+        
+        return f"A cotação atual de {ticker} é R$ {preco_atual:.2f}, operando em {estado} de {abs(variacao):.2f}% hoje."
+    except Exception as e:
+        return f"Erro ao acessar o mercado financeiro: {e}"
+
+ESCOPOS_CALENDAR = ['https://www.googleapis.com/auth/calendar.events']
+
+def autenticar_google():
+    credenciais = None
+    if os.path.exists('token.json'):
+        credenciais = Credentials.from_authorized_user_file('token.json', ESCOPOS_CALENDAR)
+    
+    if not credenciais or not credenciais.valid:
+        if credenciais and credenciais.expired and credenciais.refresh_token:
+            credenciais.refresh(Request())
+        else:
+            fluxo = InstalledAppFlow.from_client_secrets_file('credentials.json', ESCOPOS_CALENDAR)
+            credenciais = fluxo.run_local_server(port=0)
+        
+        with open('token.json', 'w') as token:
+            token.write(credenciais.to_json())
+            
+    return build('calendar', 'v3', credentials=credenciais)
+
+def criar_evento_calendario(texto_tag):
+    # Desempacota a string enviada pelo LLM e registra na nuvem
+    try:
+        partes = texto_tag.split('|')
+        if len(partes) != 2:
+            return "Erro: Formato de agenda inválido."
+            
+        inicio_str = partes[0].strip()
+        resumo = partes[1].strip()
+        
+        inicio_dt = datetime.fromisoformat(inicio_str)
+        fim_dt = inicio_dt + timedelta(hours=1)
+        
+        servico = autenticar_google()
+        evento = {
+            'summary': resumo,
+            'start': {'dateTime': inicio_dt.isoformat(), 'timeZone': 'America/Sao_Paulo'},
+            'end': {'dateTime': fim_dt.isoformat(), 'timeZone': 'America/Sao_Paulo'},
+        }
+        
+        servico.events().insert(calendarId='primary', body=evento).execute()
+        return f"O compromisso '{resumo}' foi agendado com sucesso na sua conta do Google."
+    except Exception as e:
+        return f"Falha ao registrar na nuvem: {e}"
+
 def processar_tags_ocultas(texto, usuario_atual):
     comandos = re.findall(r'\[CMD\](.*?)\[/CMD\]', texto, flags=re.DOTALL)
     for cmd in comandos:
@@ -173,10 +238,26 @@ def processar_tags_ocultas(texto, usuario_atual):
         print(f"\n[Gravando na memoria: {mem}]")
         salvar_memoria(usuario_atual, mem)
 
+    financas = re.findall(r'\[FINANCE\](.*?)\[/FINANCE\]', texto)
+    for ticker in financas:
+        print(f"\n[Acessando Bolsa de Valores: {ticker.strip()}]")
+        resultado_fin = buscar_cotacao(ticker.strip())
+        print(f"[Mercado]: {resultado_fin}")
+        falar(resultado_fin)
+        
+    agendas = re.findall(r'\[AGENDA\](.*?)\[/AGENDA\]', texto)
+    for ag in agendas:
+        print(f"\n[Acessando Google Calendar...]")
+        resultado_ag = criar_evento_calendario(ag.strip())
+        print(f"[Google]: {resultado_ag}")
+        falar(resultado_ag)
+
 def limpar_texto_para_fala(texto):
     texto_limpo = re.sub(r'\[CMD\].*?\[/CMD\]', '', texto, flags=re.DOTALL)
     texto_limpo = re.sub(r'\[MEM\].*?\[/MEM\]', '', texto_limpo, flags=re.DOTALL)
     texto_limpo = re.sub(r'\[PYTHON\].*?\[/PYTHON\]', '', texto_limpo, flags=re.DOTALL)
+    texto_limpo = re.sub(r'\[FINANCE\].*?\[/FINANCE\]', '', texto_limpo, flags=re.DOTALL)
+    texto_limpo = re.sub(r'\[AGENDA\].*?\[/AGENDA\]', '', texto_limpo, flags=re.DOTALL)
     texto_limpo = re.sub(r'[*#_]', '', texto_limpo)
     return texto_limpo
 
@@ -268,6 +349,7 @@ def iniciar_zeno_core():
 
     caminho_desktop = obter_caminho_desktop()
     usuario_db = "Sistema"
+    data_hora_atual = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
     instrucoes_sistema = f"""Voce e o Zeno, um assistente virtual de elite.
 Voce TEM PERMISSAO PARCIAL para executar comandos no Windows do usuario. Antes de realizar uma ação que possa ser vital, pergunte ao usuario.
@@ -276,6 +358,7 @@ O diretorio da Area de Trabalho e: {caminho_desktop}
 
 MEMORIA DE CONTEXTO PESSOAL:
 Nome do usuario atual na sessao: {usuario_db}
+Data e hora atual do sistema: {data_hora_atual}
 
 REGRAS OBRIGATORIAS DE MEMORIA:
 1. Grave fatos novos em tags separadas usando EXCLUSIVAMENTE [MEM] e [/MEM]. 
@@ -290,6 +373,16 @@ REGRAS PARA PROCESSAMENTO DE DADOS (ETL):
 2. SEMPRE use caminhos absolutos para ler arquivos.
 3. OBRIGATORIO: Para salvar arquivos na Area de Trabalho, use EXATAMENTE a string r"{caminho_desktop}\\resultado.csv" dentro do script.
 4. NUNCA use caminhos relativos.
+
+REGRAS DO MERCADO FINANCEIRO:
+1. Para responder sobre cotações e ações, gere EXCLUSIVAMENTE a tag [FINANCE]TICKER[/FINANCE].
+2. O sistema extrairá a tag, buscará o valor na bolsa e lerá o resultado em voz alta sozinho. Não tente inventar valores.
+3. Ações brasileiras EXIGEM o sufixo .SA (exemplo: [FINANCE]PETR4.SA[/FINANCE]).
+
+REGRAS DO GOOGLE CALENDAR:
+1. Para agendar compromissos, gere EXCLUSIVAMENTE a tag [AGENDA]YYYY-MM-DDTHH:MM:SS|Titulo do Evento[/AGENDA].
+2. Use a Data e hora atual do sistema fornecida acima como base temporal.
+3. Exemplo: [AGENDA]2026-03-24T15:00:00|Reunião de Alinhamento[/AGENDA].
 
 COMUNICACAO:
 Responda em portugues do Brasil de forma direta e sem distraçao. NUNCA imprima o seu raciocinio de etapas na tela."""
