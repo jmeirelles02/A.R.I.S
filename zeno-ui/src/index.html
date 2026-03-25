@@ -164,7 +164,12 @@
         border-radius: 4px;
         height: 140px;
         overflow-y: auto;
+        overflow-x: hidden;
         word-wrap: break-word;
+        overflow-wrap: break-word;
+        -webkit-app-region: no-drag;
+        user-select: text;
+        cursor: default;
       }
 
       .zeno-log::-webkit-scrollbar {
@@ -322,7 +327,9 @@
           if (textoAnterior !== dados.zeno) {
             logZeno.innerText = dados.zeno;
             textoAnterior = dados.zeno;
-            logContainer.scrollTop = logContainer.scrollHeight;
+            requestAnimationFrame(() => {
+              logContainer.scrollTop = logContainer.scrollHeight;
+            });
           }
 
           statusText.innerText = `[ ${dados.status} ]`;
