@@ -268,6 +268,18 @@
       const logContainer = document.getElementById("log-container");
 
       let textoAnterior = "";
+      let zenoToken = "";
+
+      async function inicializarToken() {
+        try {
+          const resp = await fetch("http://localhost:5000/token");
+          const dados = await resp.json();
+          zenoToken = dados.token;
+        } catch (erro) {
+          console.error("Falha ao obter token:", erro);
+        }
+      }
+      inicializarToken();
 
       async function enviarComando(texto) {
         if (!texto) return;
@@ -275,7 +287,10 @@
         try {
           await fetch("http://localhost:5000/enviar", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              "X-Zeno-Token": zenoToken,
+            },
             body: JSON.stringify({ comando: texto }),
           });
         } catch (erro) {

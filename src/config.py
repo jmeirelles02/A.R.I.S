@@ -1,0 +1,32 @@
+"""Configurações centralizadas e constantes do projeto."""
+
+import os
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+DATABASE_URL: str = os.getenv("DATABASE_URL", "")
+
+VOZ_PADRAO: str = "pt-BR-AntonioNeural"
+ARQUIVO_AUDIO_TEMP: str = "resposta.mp3"
+
+PAUSA_RECONHECIMENTO: float = 2.0
+TIMEOUT_ESCUTA: int = 5
+DURACAO_AJUSTE_RUIDO: float = 0.5
+
+MODELO_CHAT: str = "qwen2.5:7b"
+MODELO_EMBEDDING: str = "nomic-embed-text"
+
+PORTA_API: int = 5000
+
+TAGS_OCULTAS: list[str] = ["CMD", "MEM", "PYTHON", "FINANCE", "AGENDA", "DESMARCAR"]
+
+GATILHOS_PESQUISA: list[str] = [
+    "pesquise", "busque", "internet", "resultado", "último", "hoje",
+    "notícia", "preço", "valor", "cotação", "quanto custa", "atual", "mercado",
+]
+
+COMANDOS_SAIDA: list[str] = ["sair", "exit", "quit", "fechar", "desligar"]
+
+ESCOPOS_CALENDAR: list[str] = ["https://www.googleapis.com/auth/calendar.events"]
