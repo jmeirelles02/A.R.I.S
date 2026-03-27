@@ -11,6 +11,7 @@ def obter_caminho_desktop() -> str:
         os.path.join(caminho_usuario, "OneDrive", "Desktop"),
         os.path.join(caminho_usuario, "Desktop"),
         os.path.join(caminho_usuario, "Área de Trabalho"),
+        os.path.join(caminho_usuario, "Área de trabalho"), # Linux pt-BR
     ]
     for caminho in caminhos:
         if os.path.exists(caminho):

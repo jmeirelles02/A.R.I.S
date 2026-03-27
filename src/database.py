@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 @contextmanager
 def conectar_banco() -> Generator:
     """Gerencia conexão com o banco garantindo fechamento seguro."""
-    conn = psycopg2.connect(DATABASE_URL, connect_timeout=10, options="-c statement_timeout=15000")
+    conn = psycopg2.connect(DATABASE_URL, connect_timeout=10)
     try:
         yield conn
         conn.commit()

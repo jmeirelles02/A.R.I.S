@@ -4,7 +4,14 @@ import logging
 import os
 import subprocess
 
-import keyboard
+try:
+    import keyboard
+    HAS_KEYBOARD = True
+except ImportError:
+    HAS_KEYBOARD = False
+except Exception:
+    HAS_KEYBOARD = False
+
 import pygame
 import speech_recognition as sr
 
@@ -43,10 +50,14 @@ def falar(texto: str) -> None:
         pygame.mixer.music.play()
 
         while pygame.mixer.music.get_busy():
-            if keyboard.is_pressed("space"):
-                pygame.mixer.music.stop()
-                print("\n[A.R.I.S interrompido]")
-                break
+            if HAS_KEYBOARD:
+                try:
+                    if keyboard.is_pressed("space"):
+                        pygame.mixer.music.stop()
+                        print("\n[A.R.I.S interrompido]")
+                        break
+                except Exception:
+                    pass
             pygame.time.Clock().tick(10)
 
         pygame.mixer.music.unload()

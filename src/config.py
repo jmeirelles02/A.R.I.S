@@ -15,7 +15,7 @@ PAUSA_RECONHECIMENTO: float = 2.0
 TIMEOUT_ESCUTA: int = 5
 DURACAO_AJUSTE_RUIDO: float = 0.5
 
-MODELO_CHAT: str = "qwen2.5:7b"
+MODELO_CHAT: str = "qwen2.5:latest"
 MODELO_EMBEDDING: str = "nomic-embed-text"
 
 PORTA_API: int = 5000
@@ -28,8 +28,7 @@ TAGS_OCULTAS: list[str] = [
 ]
 
 GATILHOS_PESQUISA: list[str] = [
-    "pesquise", "busque", "internet", "resultado", "último", "hoje",
-    "notícia", "preço", "valor", "cotação", "quanto custa", "atual", "mercado",
+    "pesquise na", "busque na", "internet", "pesquise sobre", "notícia", "procurar na web"
 ]
 
 COMANDOS_SAIDA: list[str] = ["sair", "exit", "quit", "fechar", "desligar"]

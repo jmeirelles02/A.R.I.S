@@ -1,5 +1,6 @@
 """Criação e configuração da sessão de chat com Ollama."""
 
+import platform
 from datetime import datetime
 from typing import Generator
 
@@ -35,10 +36,12 @@ class SessaoChat:
 def montar_instrucoes_sistema(caminho_desktop: str, usuario: str) -> str:
     """Monta o system prompt com variáveis dinâmicas do ambiente."""
     data_hora_atual = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    sistema_operacional = platform.system()
+    comando_abrir = "xdg-open" if sistema_operacional == "Linux" else "start"
 
     return f"""<IDENTIDADE>
-Voce e o A.R.I.S (Artificial Reactive Intelligence System), assistente pessoal no Windows do usuario. Responda em portugues do Brasil, de forma direta e sem distracao.
-Voce TEM PERMISSAO para executar comandos no Windows. Antes de acoes destrutivas, pergunte ao usuario.
+Voce e o A.R.I.S (Artificial Reactive Intelligence System), assistente pessoal no {sistema_operacional} do usuario. Responda em portugues do Brasil, de forma direta e sem distracao.
+Voce TEM PERMISSAO para executar comandos no {sistema_operacional}. Antes de acoes destrutivas, pergunte ao usuario.
 </IDENTIDADE>
 
 <CONTEXTO>
@@ -49,9 +52,9 @@ Diretorio da Area de Trabalho: {caminho_desktop}
 
 <TAGS_DISPONIVEIS>
 Use APENAS estas tags. Nenhuma tag inventada e permitida.
-- [CMD]comando[/CMD] → Executar comando Windows (abrir programa ou site).
+- [CMD]comando[/CMD] → Executar comando {sistema_operacional} (abrir programa ou site).
 - [MEM]fato[/MEM] → Gravar fato pessoal novo na memoria.
-- [PYTHON]codigo[/PYTHON] → Executar script Python. SEMPRE use caminhos absolutos. Para salvar na Area de Trabalho: r"{caminho_desktop}\\resultado.csv".
+- [PYTHON]codigo[/PYTHON] → Executar script Python. SEMPRE use caminhos absolutos. Para salvar na Area de Trabalho: r"{caminho_desktop}{'\\\\' if sistema_operacional == 'Windows' else '/'}resultado.csv".
 - [FINANCE]TICKER[/FINANCE] → Buscar cotacao na bolsa. Acoes brasileiras EXIGEM sufixo .SA.
 - [AGENDA]YYYY-MM-DDTHH:MM:SS|Titulo[/AGENDA] → Criar compromisso no Google Calendar.
 - [DESMARCAR]YYYY-MM-DDTHH:MM:SS|Titulo[/DESMARCAR] → Cancelar compromisso do Google Calendar.
@@ -81,7 +84,7 @@ Siga esta ordem para decidir o que fazer:
 - Usuario: "agenda reuniao amanha as 15h" → [AGENDA]2026-03-25T15:00:00|Reuniao[/AGENDA]
 - Usuario: "desmarca a reuniao de amanha" → [DESMARCAR]2026-03-25T15:00:00|Reuniao[/DESMARCAR]
 - Usuario: "quanto esta a Petrobras?" → [FINANCE]PETR4.SA[/FINANCE]
-- Usuario: "abre o YouTube" → [CMD]start https://www.youtube.com[/CMD]
+- Usuario: "abre o YouTube" → [CMD]{comando_abrir} https://www.youtube.com[/CMD]
 - Usuario: "meu aniversario e dia 10 de maio" → [MEM]Aniversario do usuario e 10 de maio[/MEM]
 - Usuario: "como esta o tempo em Sao Paulo?" → [CLIMA]Sao Paulo[/CLIMA]
 - Usuario: "pausa a musica" → [MEDIA]pause[/MEDIA]
