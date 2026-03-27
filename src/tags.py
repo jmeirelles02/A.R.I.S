@@ -11,6 +11,7 @@ from src.database import salvar_memoria
 from src.email_service import listar_emails_recentes
 from src.finance import buscar_cotacao
 from src.media import controlar_midia
+from src.state import estado
 from src.weather import buscar_clima
 
 logger = logging.getLogger(__name__)
@@ -39,6 +40,8 @@ def processar_tags_ocultas(
         saida = executar_comando(cmd.strip())
         if saida:
             print(f"[Saida do Sistema]: {saida.strip()}")
+            estado.atualizar(aris=saida.strip())
+            estado.adicionar_mensagem("aris", saida.strip())
 
     blocos_python = re.findall(r"\[PYTHON\](.*?)\[/PYTHON\]", texto, flags=re.DOTALL)
     for codigo in blocos_python:
@@ -47,6 +50,8 @@ def processar_tags_ocultas(
         saida = executar_python(codigo.strip())
         if saida:
             print(f"[Saida do Script]:\n{saida.strip()}")
+            estado.atualizar(aris=saida.strip())
+            estado.adicionar_mensagem("aris", saida.strip())
 
     memorias = re.findall(r"\[MEM\](.*?)\[/MEM\]", texto)
     for mem in memorias:
@@ -60,6 +65,8 @@ def processar_tags_ocultas(
         print(f"\n[Acessando Bolsa de Valores: {ticker.strip()}]")
         resultado_fin = buscar_cotacao(ticker.strip())
         print(f"[Mercado]: {resultado_fin}")
+        estado.atualizar(aris=resultado_fin)
+        estado.adicionar_mensagem("aris", resultado_fin)
         callback_falar(resultado_fin)
 
     agendas = re.findall(r"\[AGENDA\](.*?)\[/AGENDA\]", texto)
@@ -68,6 +75,8 @@ def processar_tags_ocultas(
         print("\n[Acessando Google Calendar...]")
         resultado_ag = criar_evento_calendario(ag.strip())
         print(f"[Google]: {resultado_ag}")
+        estado.atualizar(aris=resultado_ag)
+        estado.adicionar_mensagem("aris", resultado_ag)
         callback_falar(resultado_ag)
 
     desmarcacoes = re.findall(r"\[DESMARCAR\](.*?)\[/DESMARCAR\]", texto)
@@ -76,6 +85,8 @@ def processar_tags_ocultas(
         print("\n[Removendo evento do Google Calendar...]")
         resultado_dm = remover_evento_calendario(dm.strip())
         print(f"[Google]: {resultado_dm}")
+        estado.atualizar(aris=resultado_dm)
+        estado.adicionar_mensagem("aris", resultado_dm)
         callback_falar(resultado_dm)
 
     climas = re.findall(r"\[CLIMA\](.*?)\[/CLIMA\]", texto)
@@ -84,6 +95,8 @@ def processar_tags_ocultas(
         print(f"\n[Buscando clima: {cidade.strip()}]")
         resultado_clima = buscar_clima(cidade.strip())
         print(f"[Clima]: {resultado_clima}")
+        estado.atualizar(aris=resultado_clima)
+        estado.adicionar_mensagem("aris", resultado_clima)
         callback_falar(resultado_clima)
 
     medias = re.findall(r"\[MEDIA\](.*?)\[/MEDIA\]", texto)
@@ -92,6 +105,8 @@ def processar_tags_ocultas(
         print(f"\n[Controle de midia: {acao.strip()}]")
         resultado_media = controlar_midia(acao.strip())
         print(f"[Media]: {resultado_media}")
+        estado.atualizar(aris=resultado_media)
+        estado.adicionar_mensagem("aris", resultado_media)
 
     emails = re.findall(r"\[EMAIL\](.*?)\[/EMAIL\]", texto)
     for qtd in emails:
@@ -100,4 +115,6 @@ def processar_tags_ocultas(
         quantidade = int(qtd.strip()) if qtd.strip().isdigit() else 5
         resultado_email = listar_emails_recentes(quantidade)
         print(f"[Gmail]: {resultado_email}")
+        estado.atualizar(aris=resultado_email)
+        estado.adicionar_mensagem("aris", resultado_email)
         callback_falar(resultado_email)

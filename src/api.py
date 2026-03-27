@@ -1,4 +1,4 @@
-"""Servidor FastAPI para comunicação com a UI do Zeno."""
+"""Servidor FastAPI para comunicação com a UI do A.R.I.S."""
 
 import logging
 import os
@@ -22,7 +22,7 @@ fila_comandos: queue.Queue[str] = queue.Queue()
 
 TOKEN_SESSAO: str = secrets.token_hex(16)
 
-app = FastAPI(title="ZenoAgent API", docs_url="/docs")
+app = FastAPI(title="A.R.I.S Agent API", docs_url="/docs")
 
 app.add_middleware(
     CORSMiddleware,
@@ -38,15 +38,15 @@ class ComandoRequest(BaseModel):
     comando: str = Field(..., min_length=1, max_length=2000)
 
 
-def verificar_token(x_zeno_token: str = Header(default="")) -> None:
+def verificar_token(x_aris_token: str = Header(default="")) -> None:
     """Valida o token de sessão nos headers da requisição."""
-    if x_zeno_token != TOKEN_SESSAO:
+    if x_aris_token != TOKEN_SESSAO:
         raise HTTPException(status_code=403, detail="Token inválido.")
 
 
 @app.get("/estado")
 def rota_estado() -> dict:
-    """Retorna o estado atual do Zeno como JSON."""
+    """Retorna o estado atual do A.R.I.S como JSON."""
     return estado.to_dict()
 
 

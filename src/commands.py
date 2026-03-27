@@ -81,7 +81,7 @@ def executar_python(codigo: str) -> str:
         return f"Bloqueado: {motivo}"
 
     logger.info("PYTHON executado: %d caracteres", len(codigo))
-    caminho = os.path.join(os.environ.get("TEMP", os.getcwd()), "zeno_script.py")
+    caminho = os.path.join(os.environ.get("TEMP", os.getcwd()), "aris_script.py")
     with open(caminho, "w", encoding="utf-8") as f:
         f.write(codigo)
     try:

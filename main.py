@@ -1,4 +1,4 @@
-"""Ponto de entrada do ZenoAgent."""
+"""Ponto de entrada do A.R.I.S Agent."""
 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="pygame")
@@ -26,7 +26,7 @@ logging.basicConfig(
     format="[%(levelname)s] %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("zeno_audit.log", encoding="utf-8"),
+        logging.FileHandler("aris_audit.log", encoding="utf-8"),
     ],
 )
 logger = logging.getLogger(__name__)
@@ -88,7 +88,7 @@ def processar_resposta_streaming(chat, pergunta_formatada: str) -> str:
     estado.atualizar(status="PENSANDO...")
 
     texto_completo = ""
-    print("Zeno: ", end="")
+    print("A.R.I.S: ", end="")
     for texto_chunk in chat.enviar_mensagem_stream(pergunta_formatada):
         print(texto_chunk, end="", flush=True)
         texto_completo += texto_chunk
@@ -130,29 +130,44 @@ def loop_principal(chat) -> None:
             texto_resposta = processar_resposta_streaming(chat, pergunta_formatada)
 
             texto_limpo = limpar_texto_para_fala(texto_resposta)
-            estado.atualizar(zeno=texto_limpo)
-            estado.adicionar_mensagem("zeno", texto_limpo)
+            estado.atualizar(aris=texto_limpo)
+            estado.adicionar_mensagem("aris", texto_limpo)
 
             processar_tags_ocultas(texto_resposta, usuario_db, callback_falar=falar)
             falar(texto_resposta)
 
         except KeyboardInterrupt:
-            sys.exit()
+            logger.info("Recebido KeyboardInterrupt. Encerrando...")
+            break
         except Exception as e:
             logger.error("Ocorreu um erro: %s", e)
+    
+    if detector_ww:
+        detector_ww.parar()
 
 
-def iniciar_zeno_core() -> None:
+def iniciar_aris_core() -> None:
     """Inicializa todos os subsistemas e inicia o loop principal."""
     global detector_ww
     pygame.mixer.init()
 
     print("==================================================")
-    print("Zeno System Iniciado. Conectado ao Ollama (local).")
+    print("A.R.I.S System Iniciado. Conectado ao Ollama (local).")
     print("==================================================")
 
     inicializar_banco()
     iniciar_servidor_api()
+
+    import signal
+
+    def lidar_com_sinal(sig, frame):
+        logger.info("Sinal de encerramento recebido. Encerrando de forma graciosa...")
+        if detector_ww:
+            detector_ww.parar()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, lidar_com_sinal)
+    signal.signal(signal.SIGTERM, lidar_com_sinal)
 
     try:
         detector_ww = DetectorWakeWord(fila_comandos)
@@ -167,4 +182,4 @@ def iniciar_zeno_core() -> None:
 
 
 if __name__ == "__main__":
-    iniciar_zeno_core()
+    iniciar_aris_core()

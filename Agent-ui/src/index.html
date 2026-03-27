@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Zeno System</title>
+    <title>A.R.I.S System</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -19,7 +19,7 @@
         color: #00f3ff;
       }
 
-      .zeno-hud-container {
+      .aris-hud-container {
         width: 800px;
         height: 720px;
         background-color: rgba(0, 10, 20, 0.9);
@@ -36,7 +36,7 @@
       }
 
       /* ── HEADER ── */
-      .zeno-top-bar {
+      .aris-top-bar {
         width: 92%;
         display: flex;
         justify-content: space-between;
@@ -46,14 +46,14 @@
         border-bottom: 1px solid rgba(0, 243, 255, 0.1);
       }
 
-      .zeno-title {
+      .aris-title {
         font-size: 16px;
         letter-spacing: 8px;
         color: #bdf8ff;
         text-shadow: 0 0 8px rgba(0, 243, 255, 0.4);
       }
 
-      .zeno-clock {
+      .aris-clock {
         font-size: 13px;
         color: rgba(189, 248, 255, 0.6);
         letter-spacing: 2px;
@@ -88,7 +88,7 @@
       }
 
       /* ── MAIN AREA ── */
-      .zeno-main {
+      .aris-main {
         display: flex;
         width: 92%;
         flex: 1;
@@ -98,7 +98,7 @@
       }
 
       /* ── LEFT: REACTOR + METRICS ── */
-      .zeno-left {
+      .aris-left {
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -223,7 +223,7 @@
       }
 
       /* ── RIGHT: CHAT + STATUS ── */
-      .zeno-right {
+      .aris-right {
         flex: 1;
         display: flex;
         flex-direction: column;
@@ -276,7 +276,7 @@
         color: #bdf8ff;
       }
 
-      .msg-zeno {
+      .msg-aris {
         align-self: flex-start;
         background: rgba(0, 60, 120, 0.15);
         border: 1px solid rgba(0, 100, 200, 0.15);
@@ -299,7 +299,7 @@
       }
 
       /* ── STATUS BAR ── */
-      .zeno-status-bar {
+      .aris-status-bar {
         width: 92%;
         display: flex;
         justify-content: space-between;
@@ -309,7 +309,7 @@
         border-top: 1px solid rgba(0, 243, 255, 0.1);
       }
 
-      .zeno-status {
+      .aris-status {
         font-size: 11px;
         font-weight: bold;
         letter-spacing: 3px;
@@ -360,23 +360,23 @@
     </style>
   </head>
   <body>
-    <div class="zeno-hud-container">
+    <div class="aris-hud-container">
 
       <!-- TOP BAR -->
-      <div class="zeno-top-bar">
+      <div class="aris-top-bar">
         <div class="window-controls">
           <button class="win-btn win-btn-close" id="btn-close" title="Minimizar para bandeja"></button>
           <button class="win-btn win-btn-minimize" id="btn-minimize" title="Minimizar"></button>
         </div>
-        <div class="zeno-title">ZENO</div>
-        <div class="zeno-clock" id="clock">00:00:00</div>
+        <div class="aris-title">A.R.I.S</div>
+        <div class="aris-clock" id="clock">00:00:00</div>
       </div>
 
       <!-- MAIN AREA -->
-      <div class="zeno-main">
+      <div class="aris-main">
 
         <!-- LEFT: Reactor + Metrics -->
-        <div class="zeno-left">
+        <div class="aris-left">
           <div class="arc-reactor">
             <div class="ring outer-ring"></div>
             <div class="ring middle-ring"></div>
@@ -409,16 +409,16 @@
         </div>
 
         <!-- RIGHT: Chat -->
-        <div class="zeno-right">
+        <div class="aris-right">
           <div class="chat-container" id="chat-container">
-            <div class="chat-vazio">Inicie uma conversa com o Zeno</div>
+            <div class="chat-vazio">Inicie uma conversa com o A.R.I.S</div>
           </div>
         </div>
       </div>
 
       <!-- STATUS BAR -->
-      <div class="zeno-status-bar">
-        <div class="zeno-status" id="status-text">[ STANDBY ]</div>
+      <div class="aris-status-bar">
+        <div class="aris-status" id="status-text">[ STANDBY ]</div>
       </div>
 
       <!-- INPUT -->
@@ -443,16 +443,16 @@
       const chatContainer = document.getElementById("chat-container");
       const clockEl = document.getElementById("clock");
 
-      let zenoToken = "";
-      let ultimoHistLen = 0;
+      let arisToken = "";
+      let _ultimoHistHash = "";
 
       // ── TOKEN ──
       async function inicializarToken() {
-        while (!zenoToken) {
+        while (!arisToken) {
           try {
             const resp = await fetch("http://localhost:5000/token");
             const dados = await resp.json();
-            zenoToken = dados.token;
+            arisToken = dados.token;
           } catch (e) {
             await new Promise(r => setTimeout(r, 2000));
           }
@@ -492,7 +492,7 @@
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "X-Zeno-Token": zenoToken,
+              "X-Aris-Token": arisToken,
             },
             body: JSON.stringify({ comando: texto }),
           });
@@ -515,24 +515,25 @@
 
       // ── RENDER CHAT ──
       function renderizarHistorico(historico) {
-        if (historico.length === ultimoHistLen) return;
-        ultimoHistLen = historico.length;
+        const novoHash = JSON.stringify(historico);
+        if (novoHash === _ultimoHistHash) return;
+        _ultimoHistHash = novoHash;
 
         chatContainer.innerHTML = "";
 
         if (historico.length === 0) {
-          chatContainer.innerHTML = '<div class="chat-vazio">Inicie uma conversa com o Zeno</div>';
+          chatContainer.innerHTML = '<div class="chat-vazio">Inicie uma conversa com o A.R.I.S</div>';
           return;
         }
 
         historico.forEach((msg) => {
           const div = document.createElement("div");
           const isUser = msg.papel === "usuario";
-          div.className = `msg ${isUser ? "msg-usuario" : "msg-zeno"}`;
+          div.className = `msg ${isUser ? "msg-usuario" : "msg-aris"}`;
 
           const tag = document.createElement("div");
           tag.className = "msg-tag";
-          tag.textContent = isUser ? "VOCÊ" : "ZENO";
+          tag.textContent = isUser ? "VOCÊ" : "A.R.I.S";
           div.appendChild(tag);
 
           const txt = document.createElement("div");

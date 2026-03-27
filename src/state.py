@@ -1,4 +1,4 @@
-"""Estado global thread-safe do Zeno."""
+"""Estado global thread-safe do A.R.I.S."""
 
 from dataclasses import dataclass, field
 from threading import Lock
@@ -8,13 +8,13 @@ from src.config import MAX_HISTORICO
 
 
 @dataclass
-class EstadoZeno:
+class EstadoAris:
     """Armazena o estado atual do assistente com acesso thread-safe."""
 
     _lock: Lock = field(default_factory=Lock, repr=False)
     status: str = "ONLINE"
     usuario: str = "Aguardando comando..."
-    zeno: str = "Sistemas iniciados."
+    aris: str = "Sistemas iniciados."
     historico: list[dict[str, str]] = field(default_factory=list)
 
     def atualizar(self, **kwargs: Any) -> None:
@@ -35,9 +35,9 @@ class EstadoZeno:
             return {
                 "status": self.status,
                 "usuario": self.usuario,
-                "zeno": self.zeno,
+                "aris": self.aris,
                 "historico": list(self.historico),
             }
 
 
-estado = EstadoZeno()
+estado = EstadoAris()

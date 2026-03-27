@@ -10,14 +10,14 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             // Menu do tray
-            let mostrar = MenuItem::with_id(app, "mostrar", "Mostrar Zeno", true, None::<&str>)?;
+            let mostrar = MenuItem::with_id(app, "mostrar", "Mostrar A.R.I.S", true, None::<&str>)?;
             let sair = MenuItem::with_id(app, "sair", "Encerrar", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&mostrar, &sair])?;
 
             // Ícone do tray
             let _tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
-                .tooltip("Zeno - Assistente Pessoal")
+                .tooltip("A.R.I.S - Assistente Pessoal")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
@@ -30,7 +30,7 @@ pub fn run() {
                     "sair" => {
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.eval(
-                                "fetch('http://localhost:5000/encerrar', { method: 'POST', headers: { 'X-Zeno-Token': zenoToken } })"
+                                "fetch('http://localhost:5000/encerrar', { method: 'POST', headers: { 'X-Aris-Token': arisToken } })"
                             );
                         }
                         std::thread::sleep(std::time::Duration::from_millis(500));

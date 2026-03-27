@@ -45,7 +45,7 @@ def falar(texto: str) -> None:
         while pygame.mixer.music.get_busy():
             if keyboard.is_pressed("space"):
                 pygame.mixer.music.stop()
-                print("\n[Zeno interrompido]")
+                print("\n[A.R.I.S interrompido]")
                 break
             pygame.time.Clock().tick(10)
 
@@ -66,7 +66,7 @@ def ouvir() -> str:
     reconhecedor.pause_threshold = PAUSA_RECONHECIMENTO
     with sr.Microphone() as fonte:
         estado.atualizar(status="OUVINDO...")
-        print("\n[Zeno ouvindo...]")
+        print("\n[A.R.I.S ouvindo...]")
         reconhecedor.adjust_for_ambient_noise(fonte, duration=DURACAO_AJUSTE_RUIDO)
         try:
             audio = reconhecedor.listen(fonte, timeout=TIMEOUT_ESCUTA)

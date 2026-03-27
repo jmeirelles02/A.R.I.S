@@ -11,7 +11,7 @@ from vosk import Model, KaldiRecognizer, SetLogLevel
 
 logger = logging.getLogger(__name__)
 
-WAKE_WORDS: list[str] = ["zeno", "zero", "xeno", "zen", "zena", "zino"]
+WAKE_WORDS: list[str] = ["aris", "ares", "iris", "aries", "ariz", "áris", "áries", "aires", "ari", "hades", "areas"]
 CAMINHO_MODELO: str = "vosk-model-small-pt-0.3"
 TAXA_AMOSTRAGEM: int = 16000
 TAMANHO_BLOCO: int = 8000
@@ -53,8 +53,13 @@ class DetectorWakeWord:
             self.pausado = False
 
     def parar(self) -> None:
-        """Para a escuta permanentemente."""
+        """Para a escuta permanentemente e libera o microfone."""
         self.ativo = False
+        if self._thread and self._thread.is_alive():
+            try:
+                self._thread.join(timeout=2.0)
+            except RuntimeError:
+                pass
 
     def _loop_escuta(self) -> None:
         """Loop principal de escuta contínua com Vosk."""
@@ -89,7 +94,7 @@ class DetectorWakeWord:
                     resultado = json.loads(reconhecedor.Result())
                     texto = resultado.get("text", "")
                     if texto:
-                        logger.debug("Vosk ouviu: '%s'", texto)
+                        print(f"[Vosk Ouviu: '{texto}']")
                     if _contem_wake_word(texto):
                         logger.info("Wake word detectada: '%s'", texto)
                         print(f"\n[Wake word detectada: '{texto}']")
@@ -98,8 +103,12 @@ class DetectorWakeWord:
                 else:
                     parcial = json.loads(reconhecedor.PartialResult())
                     texto_parcial = parcial.get("partial", "")
+                    if texto_parcial:
+                        pass 
+                        print(f"[Vosk Parcial: '{texto_parcial}']", end="\r", flush=True)
                     if _contem_wake_word(texto_parcial):
                         logger.info("Wake word detectada (parcial): '%s'", texto_parcial)
+                        print(" " * 50, end="\r")
                         print(f"\n[Wake word detectada: '{texto_parcial}']")
                         self.fila.put("[VOZ]")
                         break
