@@ -1,11 +1,9 @@
-# Zeno Agent
+# A.R.I.S (ARTIFICIAL REACTIVE INTELLIGENT SYSTEM)
 
-## O que é o Zeno?
-O Zeno é um assistente virtual de operação local. Ele processa comandos de voz e texto para executar tarefas no sistema operacional Windows. O sistema une um back-end construído em Python com uma interface visual desenvolvida em Tauri (HTML/CSS/JS).
+## O que é o A.R.I.S?
+O A.R.I.S ou ARIS é um assistente virtual de operação local. Ele processa comandos de voz e texto para executar tarefas no sistema operacional Windows. O sistema une um back-end construído em Python com uma interface visual desenvolvida em Tauri (HTML/CSS/JS).
 
-A arquitetura funciona como um restaurante. A interface Tauri atua como o salão de atendimento. O servidor Flask em Python funciona como a cozinha. O modelo Google Gemini 2.5 Flash opera como o chef que dita as ações, as buscas na web e as lógicas de Extração, Transformação e Carga (ETL).
-
-O Zeno possui as seguintes funções ativas:
+O ARIS possui as seguintes funções ativas:
 * Executar comandos de sistema e abrir programas.
 * Escrever e rodar scripts Python locais automaticamente.
 * Consultar dados atualizados na internet.
@@ -29,7 +27,7 @@ GEMINI_API_KEY: Guarda o token de autenticação da API do Google. O motor Pytho
 Como Iniciar
 Você aciona o sistema através do inicializador silencioso.
 
-Execute o arquivo zeno_invisivel.vbs.
+Execute o arquivo aris.vbs.
 
 O script inicia o servidor Flask em segundo plano.
 
