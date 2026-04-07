@@ -1,7 +1,5 @@
-#!/bin/bash
 echo ">> Iniciando A.R.I.S no modo Linux..."
 
-# Ativar venv
 if [ -f "venv/bin/activate" ]; then
     source venv/bin/activate
 else
@@ -9,7 +7,6 @@ else
     exit 1
 fi
 
-# Roda o backend no background
 python3 main.py &
 BACKEND_PID=$!
 
@@ -23,5 +20,4 @@ fi
 cd Agent-ui
 npm run tauri dev
 
-# Finaliza o backend ao fechar o front-end
 kill $BACKEND_PID

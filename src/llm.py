@@ -1,12 +1,28 @@
-"""Criação e configuração da sessão de chat com Ollama."""
+"""Criação e configuração da sessão de chat com Ollama.
 
+Suporta dois modos de operação:
+  1. Chat streaming (legado) — para interação conversacional fluida.
+  2. Pipeline multimodal estruturado — para requisições com imagem (dual-model).
+"""
+
+import json
+import logging
 import platform
 from datetime import datetime
-from typing import Generator
+from typing import Any, Generator
 
 import ollama
+from pydantic import ValidationError
 
 from src.config import MAX_HISTORICO_LLM, MODELO_CHAT
+from src.database import buscar_memoria_relevante
+from src.models import SystemResponse, validar_resposta_llm
+from src.ollama_client import (
+    OllamaClientError,
+    pipeline_multimodal,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class SessaoChat:
@@ -37,6 +53,76 @@ class SessaoChat:
         """Mantém apenas as últimas N mensagens + system prompt."""
         if len(self.mensagens) > MAX_HISTORICO_LLM + 1:
             self.mensagens = [self.mensagens[0]] + self.mensagens[-MAX_HISTORICO_LLM:]
+
+
+def processar_requisicao_multimodal(
+    texto_usuario: str,
+    imagem_base64: str | None = None,
+) -> dict[str, Any]:
+    """Processa uma requisição usando o pipeline dual-model com validação.
+
+    Este é o ponto de entrada para requisições multimodais vindas da API.
+    Segue a árvore de decisão:
+      - COM imagem: Moondream (visão) → descarrega → Qwen (lógica/JSON)
+      - SEM imagem: Qwen (lógica/JSON) direto
+
+    Args:
+        texto_usuario: Texto do comando do usuário.
+        imagem_base64: Imagem capturada em Base64 (opcional).
+
+    Returns:
+        Dicionário com a resposta validada ou fallback em caso de erro.
+    """
+    # Buscar contexto do banco vetorial
+    contexto_rag = buscar_memoria_relevante(texto_usuario)
+
+    try:
+        # Executar pipeline (com ou sem imagem)
+        json_bruto = pipeline_multimodal(
+            texto_usuario=texto_usuario,
+            contexto_rag=contexto_rag,
+            imagem_base64=imagem_base64,
+        )
+
+        # Validar contra schema Pydantic
+        resposta_validada = validar_resposta_llm(json_bruto)
+        logger.info(
+            "Resposta validada — ação: %s (confiança: %.2f)",
+            resposta_validada.action.type,
+            resposta_validada.action.confidence,
+        )
+        return resposta_validada.model_dump()
+
+    except ValidationError as e:
+        logger.error("Validação Pydantic falhou: %s", e)
+        return _resposta_fallback(
+            f"Erro de validação na resposta do modelo. Detalhes: {e}"
+        )
+    except OllamaClientError as e:
+        logger.error("Erro no pipeline Ollama: %s", e)
+        return _resposta_fallback(
+            f"Erro de comunicação com o Ollama: {e}"
+        )
+    except json.JSONDecodeError as e:
+        logger.error("Resposta do modelo não é JSON válido: %s", e)
+        return _resposta_fallback(
+            "O modelo não retornou JSON válido. Tente novamente."
+        )
+    except Exception as e:
+        logger.error("Erro inesperado no pipeline multimodal: %s", e)
+        return _resposta_fallback(f"Erro inesperado: {e}")
+
+
+def _resposta_fallback(mensagem_erro: str) -> dict[str, Any]:
+    """Gera uma resposta de fallback segura quando o pipeline falha."""
+    return {
+        "response": mensagem_erro,
+        "action": {
+            "type": "NONE",
+            "payload": None,
+            "confidence": 0.0,
+        },
+    }
 
 
 def montar_instrucoes_sistema(caminho_desktop: str, usuario: str) -> str:

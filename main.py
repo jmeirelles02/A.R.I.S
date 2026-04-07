@@ -10,15 +10,16 @@ import threading
 
 import pygame
 
-from src.api import fila_comandos, rodar_servidor
-from src.config import GATILHOS_PESQUISA
+from src.api import fila_comandos, fila_multimodal, rodar_servidor
+from src.config import GATILHOS_PESQUISA, GATILHOS_VISAO
 from src.database import buscar_memoria_relevante, inicializar_banco
-from src.llm import criar_sessao_chat
+from src.llm import criar_sessao_chat, processar_requisicao_multimodal
 from src.search import buscar_na_internet
 from src.speech import falar, ouvir
 from src.state import estado
 from src.tags import limpar_texto_para_fala, processar_tags_ocultas
 from src.utils import obter_caminho_desktop
+from src.vision import capturar_tela_base64
 from src.wakeword import DetectorWakeWord
 
 logging.basicConfig(
@@ -46,12 +47,71 @@ def aguardar_entrada() -> str | None:
         return None
 
 
+def verificar_fila_multimodal() -> dict | None:
+    """Verifica se há requisições multimodais pendentes (non-blocking)."""
+    try:
+        return fila_multimodal.get_nowait()
+    except queue.Empty:
+        return None
+
+
 def resolver_entrada(entrada: str) -> str | None:
     """Resolve a entrada: comando de voz ou texto direto."""
     if entrada == "[VOZ]":
         pergunta = ouvir()
         return pergunta if pergunta else None
     return entrada
+
+
+def detectar_intencao_visao(texto: str) -> bool:
+    """Verifica se o texto do usuário indica intenção de análise visual.
+
+    Compara o texto contra a lista GATILHOS_VISAO definida em config.py.
+
+    Args:
+        texto: Texto falado ou digitado pelo usuário.
+
+    Returns:
+        True se alguma palavra-chave de visão foi detectada.
+    """
+    texto_lower = texto.lower()
+    return any(gatilho in texto_lower for gatilho in GATILHOS_VISAO)
+
+
+def processar_com_visao(pergunta: str) -> None:
+    """Captura a tela e processa pelo pipeline multimodal (Moondream → Qwen).
+
+    Fluxo:
+    1. Captura a tela via screenshot.
+    2. Envia para o pipeline dual-model (Moondream analisa → Qwen responde).
+    3. Atualiza o estado e fala a resposta.
+
+    Args:
+        pergunta: Texto original do usuário.
+    """
+    estado.atualizar(usuario=pergunta)
+    estado.adicionar_mensagem("usuario", pergunta)
+
+    # Capturar tela
+    estado.atualizar(status="CAPTURANDO TELA...")
+    logger.info("Intenção de visão detectada. Capturando tela...")
+    imagem_b64 = capturar_tela_base64()
+
+    if imagem_b64 is None:
+        msg_erro = "Não consegui capturar a tela. Verifique se scrot ou gnome-screenshot está instalado."
+        logger.error(msg_erro)
+        estado.atualizar(status="ONLINE", aris=msg_erro)
+        estado.adicionar_mensagem("aris", msg_erro)
+        falar(msg_erro)
+        return
+
+    logger.info("Tela capturada (%d chars B64). Enviando para pipeline multimodal...", len(imagem_b64))
+
+    dados_multimodal = {
+        "comando": pergunta,
+        "imagem": imagem_b64,
+    }
+    processar_requisicao_visual(dados_multimodal)
 
 
 def enriquecer_pergunta(pergunta: str) -> str:
@@ -97,6 +157,46 @@ def processar_resposta_streaming(chat, pergunta_formatada: str) -> str:
     return texto_completo
 
 
+def processar_requisicao_visual(dados_multimodal: dict) -> None:
+    """Processa uma requisição multimodal (com imagem) pelo pipeline dual-model.
+
+    Fluxo:
+    1. Moondream analisa a imagem → gera descrição textual.
+    2. Descarrega Moondream da VRAM (keep_alive=0).
+    3. Qwen processa o prompt compilado → retorna JSON estruturado.
+    4. Resposta é validada via Pydantic e exibida ao usuário.
+    """
+    comando = dados_multimodal["comando"]
+    imagem = dados_multimodal.get("imagem")
+
+    estado.atualizar(usuario=comando)
+    estado.adicionar_mensagem("usuario", comando)
+
+    modo = "ANALISANDO TELA..." if imagem else "PROCESSANDO..."
+    estado.atualizar(status=modo)
+    logger.info("Pipeline multimodal iniciado (imagem: %s).", "SIM" if imagem else "NÃO")
+
+    resultado = processar_requisicao_multimodal(
+        texto_usuario=comando,
+        imagem_base64=imagem,
+    )
+
+    texto_resposta = resultado.get("response", "Sem resposta do modelo.")
+    acao = resultado.get("action", {})
+
+    print(f"\nA.R.I.S [MULTIMODAL]: {texto_resposta}")
+    logger.info(
+        "Resposta multimodal — Ação: %s | Confiança: %.2f",
+        acao.get("type", "NONE"),
+        acao.get("confidence", 0.0),
+    )
+
+    estado.atualizar(status="ONLINE", aris=texto_resposta)
+    estado.adicionar_mensagem("aris", texto_resposta)
+
+    falar(texto_resposta)
+
+
 detector_ww: DetectorWakeWord | None = None
 
 
@@ -111,6 +211,15 @@ def loop_principal(chat) -> None:
             if detector_ww:
                 detector_ww.retomar()
 
+            # ── Prioridade 1: Requisições multimodais (com imagem) ──
+            dados_multimodal = verificar_fila_multimodal()
+            if dados_multimodal:
+                if detector_ww:
+                    detector_ww.pausar()
+                processar_requisicao_visual(dados_multimodal)
+                continue
+
+            # ── Prioridade 2: Comandos convencionais (texto/voz) ──
             entrada = aguardar_entrada()
             if not entrada:
                 continue
@@ -122,7 +231,13 @@ def loop_principal(chat) -> None:
             if not pergunta:
                 continue
 
+            # ── Verificar intenção de visão (tela/screenshot) ──
+            if detectar_intencao_visao(pergunta):
+                logger.info("Gatilho de visão detectado em: '%s'", pergunta)
+                processar_com_visao(pergunta)
+                continue
 
+            # ── Fluxo convencional (apenas texto) ──
             estado.atualizar(usuario=pergunta)
             estado.adicionar_mensagem("usuario", pergunta)
 
@@ -158,6 +273,8 @@ def iniciar_aris_core() -> None:
 
     print("==================================================")
     print("A.R.I.S System Iniciado. Conectado ao Ollama (local).")
+    print("  Pipeline Multimodal: Moondream (visão ~2GB) + Qwen (lógica)")
+    print("  Gestão VRAM: keep_alive=0 (descarregamento dinâmico)")
     print("==================================================")
 
     inicializar_banco()

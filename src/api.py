@@ -22,6 +22,9 @@ fila_comandos: queue.Queue[str] = queue.Queue()
 
 TOKEN_SESSAO: str = secrets.token_hex(16)
 
+# Fila separada para requisições multimodais (com imagem)
+fila_multimodal: queue.Queue[dict] = queue.Queue()
+
 app = FastAPI(title="A.R.I.S Agent API", docs_url="/docs")
 
 app.add_middleware(
@@ -36,6 +39,17 @@ class ComandoRequest(BaseModel):
     """Schema de validação para comandos recebidos da UI."""
 
     comando: str = Field(..., min_length=1, max_length=2000)
+
+
+class ComandoMultimodalRequest(BaseModel):
+    """Schema para comandos com imagem Base64 opcional."""
+
+    comando: str = Field(..., min_length=1, max_length=2000)
+    imagem: str | None = Field(
+        default=None,
+        description="Imagem em Base64 (PNG/JPEG) para análise visual.",
+        max_length=10_000_000,  # ~7.5MB de imagem
+    )
 
 
 def verificar_token(x_aris_token: str = Header(default="")) -> None:
@@ -72,6 +86,47 @@ def receber_comando(
     else:
         fila_comandos.put(dados.comando)
     return {"status": "recebido"}
+
+
+@app.post("/enviar_multimodal")
+def receber_comando_multimodal(
+    dados: ComandoMultimodalRequest, _: None = Depends(verificar_token)
+) -> dict:
+    """Recebe comandos com imagem opcional para pipeline dual-model.
+
+    Este endpoint aceita um campo `imagem` Base64 que será processado
+    pelo pipeline Moondream (visão) → Qwen (lógica).
+
+    Se `imagem` for None, o comando é processado apenas pelo Qwen.
+    """
+    logger.info(
+        "Requisição multimodal recebida (imagem: %s, comando: %d chars).",
+        "SIM" if dados.imagem else "NÃO",
+        len(dados.comando),
+    )
+
+    fila_multimodal.put({
+        "comando": dados.comando,
+        "imagem": dados.imagem,
+    })
+    return {"status": "recebido", "modo": "multimodal"}
+
+
+@app.post("/capturar_tela")
+def capturar_tela_endpoint(_: None = Depends(verificar_token)) -> dict:
+    """Captura a tela do sistema e retorna como Base64.
+
+    Útil para a UI solicitar uma captura sob demanda.
+    """
+    from src.vision import capturar_tela_base64
+
+    imagem_b64 = capturar_tela_base64()
+    if imagem_b64 is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Falha na captura de tela. Verifique os logs.",
+        )
+    return {"imagem": imagem_b64}
 
 
 @app.get("/token")
