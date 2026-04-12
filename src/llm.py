@@ -1,4 +1,4 @@
-"""Criação e configuração da sessão de chat com Ollama — Native Tool Calling.
+"""Criação e configuração da sessão de chat com Ollama.
 
 Suporta dois modos de operação:
   1. Chat com Tool Calling nativo — o modelo decide quando e qual ferramenta usar.

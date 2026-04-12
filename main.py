@@ -1,8 +1,4 @@
-"""Ponto de entrada do A.R.I.S Agent — v2.0 (Native Tool Calling).
-
-Fluxo unificado:
-  Entrada (Voz/Texto) → Enriquecimento (Web/RAG) → LLM (Tools) → Resultado → Saída (Voz/UI)
-"""
+"""Ponto de entrada do A.R.I.S Agent."""
 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="pygame")
